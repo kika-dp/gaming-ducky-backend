@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@n
 import { PagesService } from './pages.service';
 import { CreatePageDto, UpdatePageDto } from './dto/create-page.dto';
 import { AdminAuthGuard } from '../../modules/admin/guards/admin-auth.guard';
+import { JwtOptionalAuthGuard } from '../../modules/auth/guards/jwt-optional-auth.guard';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 
 @ApiTags('Pages')
@@ -18,12 +19,16 @@ export class PagesController {
     }
 
     @Get()
+    @UseGuards(JwtOptionalAuthGuard)
+    @ApiBearerAuth()
     @ApiOperation({ summary: 'List all pages' })
     findAll() {
         return this.pagesService.findAll();
     }
 
     @Get(':id')
+    @UseGuards(JwtOptionalAuthGuard)
+    @ApiBearerAuth()
     @ApiOperation({ summary: 'Get page details by ID' })
     findOne(@Param('id') id: string) {
         return this.pagesService.findOne(id);
@@ -31,6 +36,8 @@ export class PagesController {
 
     // Public endpoint to fetch by slug, usually needed for frontend
     @Get('slug/:slug')
+    @UseGuards(JwtOptionalAuthGuard)
+    @ApiBearerAuth()
     @ApiOperation({ summary: 'Get page details by slug' })
     findBySlug(@Param('slug') slug: string) {
         return this.pagesService.findBySlug(slug);
