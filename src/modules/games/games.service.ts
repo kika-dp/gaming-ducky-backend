@@ -2,8 +2,10 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Game, GameCategory } from './entities/game.entity';
+import { GameReaction, ReactionType } from './entities/game-reaction.entity';
 import { CreateGameDto, UpdateGameDto } from './dto/create-game.dto';
 import { GameQueryDto } from './dto/game-query.dto';
+import { GameReactionStatsDto, ReactionResponseDto } from './dto/reaction.dto';
 
 @Injectable()
 export class GamesService {
@@ -12,6 +14,8 @@ export class GamesService {
         private gamesRepository: Repository<Game>,
         @InjectRepository(GameCategory)
         private gameCategoryRepository: Repository<GameCategory>,
+        @InjectRepository(GameReaction)
+        private gameReactionRepository: Repository<GameReaction>,
         private dataSource: DataSource,
     ) { }
 
@@ -131,5 +135,111 @@ export class GamesService {
     async remove(id: string): Promise<void> {
         const result = await this.gamesRepository.delete(id);
         if (result.affected === 0) throw new NotFoundException('Game not found');
+    }
+
+    // Reaction Methods
+    async likeGame(gameId: string, userId: string): Promise<ReactionResponseDto> {
+        // Verify game exists
+        await this.findOne(gameId);
+
+        // Check if user already has a reaction
+        const existingReaction = await this.gameReactionRepository.findOne({
+            where: { gameId, userId },
+        });
+
+        if (existingReaction) {
+            if (existingReaction.reactionType === ReactionType.LIKE) {
+                return { message: 'Game already liked', reactionType: 'like' };
+            }
+            // Update dislike to like
+            existingReaction.reactionType = ReactionType.LIKE;
+            await this.gameReactionRepository.save(existingReaction);
+            return { message: 'Reaction updated to like', reactionType: 'like' };
+        }
+
+        // Create new like reaction
+        const reaction = this.gameReactionRepository.create({
+            gameId,
+            userId,
+            reactionType: ReactionType.LIKE,
+        });
+        await this.gameReactionRepository.save(reaction);
+        return { message: 'Game liked successfully', reactionType: 'like' };
+    }
+
+    async dislikeGame(gameId: string, userId: string): Promise<ReactionResponseDto> {
+        // Verify game exists
+        await this.findOne(gameId);
+
+        // Check if user already has a reaction
+        const existingReaction = await this.gameReactionRepository.findOne({
+            where: { gameId, userId },
+        });
+
+        if (existingReaction) {
+            if (existingReaction.reactionType === ReactionType.DISLIKE) {
+                return { message: 'Game already disliked', reactionType: 'dislike' };
+            }
+            // Update like to dislike
+            existingReaction.reactionType = ReactionType.DISLIKE;
+            await this.gameReactionRepository.save(existingReaction);
+            return { message: 'Reaction updated to dislike', reactionType: 'dislike' };
+        }
+
+        // Create new dislike reaction
+        const reaction = this.gameReactionRepository.create({
+            gameId,
+            userId,
+            reactionType: ReactionType.DISLIKE,
+        });
+        await this.gameReactionRepository.save(reaction);
+        return { message: 'Game disliked successfully', reactionType: 'dislike' };
+    }
+
+    async removeReaction(gameId: string, userId: string): Promise<ReactionResponseDto> {
+        // Verify game exists
+        await this.findOne(gameId);
+
+        const result = await this.gameReactionRepository.delete({ gameId, userId });
+
+        if (result.affected === 0) {
+            return { message: 'No reaction to remove', reactionType: null };
+        }
+
+        return { message: 'Reaction removed successfully', reactionType: null };
+    }
+
+    async getUserReaction(gameId: string, userId: string): Promise<'like' | 'dislike' | null> {
+        const reaction = await this.gameReactionRepository.findOne({
+            where: { gameId, userId },
+        });
+
+        return reaction ? reaction.reactionType : null;
+    }
+
+    async getGameReactionStats(gameId: string, userId?: string): Promise<GameReactionStatsDto> {
+        // Verify game exists
+        await this.findOne(gameId);
+
+        // Count likes and dislikes
+        const likeCount = await this.gameReactionRepository.count({
+            where: { gameId, reactionType: ReactionType.LIKE },
+        });
+
+        const dislikeCount = await this.gameReactionRepository.count({
+            where: { gameId, reactionType: ReactionType.DISLIKE },
+        });
+
+        // Get user's reaction if userId provided
+        let userReaction: 'like' | 'dislike' | null = null;
+        if (userId) {
+            userReaction = await this.getUserReaction(gameId, userId);
+        }
+
+        return {
+            likeCount,
+            dislikeCount,
+            userReaction,
+        };
     }
 }
